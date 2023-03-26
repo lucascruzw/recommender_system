@@ -201,18 +201,34 @@ teste <- filmes_classificacao[!amostra, ]
 #colaborativa
 sistema_rec <- recommenderRegistry$get_entries(dataType ="realRatingMatrix")
 sistema_rec$IBCF_realRatingMatrix$parameters
-modelo_rec <- Recommender(data = treino, method = "IBCF", parameter = list(k = 30))
+
+modelo_rec <- Recommender(data = treino, method = "IBCF", list(method = "pearson"))
 modelo_rec
 class(modelo_rec)
 
+# Usando a função getModel() vamos retornar o modelo_rec. Vamos então encontrar a classe
+#e dimensões das similaridades da matriz contidas dentro do info_model
+info_model <- getModel(modelo_rec)
+class(info_model$sim)
+dim(info_model$sim)
+top_itens <- 20
+image(info_model$sim[1:top_itens, 1:top_itens],
+      main = "Mapa de Calor das primeiras colunas e linhas")
+
+# Vamos somar as linhas e colunas com as similaridades dos objetos acima
+soma_lin <- rowSums(info_model$sim > 0)
+table(soma_lin)
+
+soma_col <- colSums(info_model$sim > 0)
+qplot(soma_col, fill=I("steelblue"), col=I("red"))+ ggtitle("Distribuição da soma de colunas")
 
 # Vamos criar uma variável chamada top_rec (top recomendações), que será inicializada até 10. Depois
 #usaremos o predict() que vai identificar itens similares e irá ranquear os mesmos apropriadamente.
 #Cada classificação é usada como peso. Cada peso é multiplicado com similaridades relacionadas. Depois
 #tudo será adicionado no final
 top_rec <- 10 # numero de recomendações para cada usuário
-pred_rec <- predict(object = recommen_model,
-                                     newdata = testing_data,
+pred_rec <- predict(object = modelo_rec,
+                                     newdata = teste,
                                      n = top_rec)
 pred_rec
 
