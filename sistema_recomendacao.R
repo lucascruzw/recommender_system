@@ -26,7 +26,7 @@ str(classificacao)
 
 # Verificando um resumo de todo o banco de dados com alguns dados estatisticos:
 summary(filmes)
-summary (classificacao)
+summary(classificacao)
 
 #verificando cabeçalho dos banco de dados:
 head(filmes)
@@ -113,6 +113,7 @@ modelo_recomendacao$IBCF_realRatingMatrix$parameters
 matriz_similaridade <- similarity(matriz_classificacao[1:10,], method = "pearson", which = "users")
 as.matrix(matriz_similaridade)
 image(as.matrix(matriz_similaridade), main = "Similaridades de Usuários")
+
 # A correlação de pearson é definida em uma faixa entre -1 e 1, no caso da 
 #similaridade para essa biblioteca soma 1 no coeficiente e divide por 2, para
 #manter uma faixa entre 0 e 1
@@ -203,7 +204,6 @@ sistema_rec <- recommenderRegistry$get_entries(dataType ="realRatingMatrix")
 sistema_rec$IBCF_realRatingMatrix$parameters
 
 modelo_rec <- Recommender(data = treino, method = "IBCF", list(method = "pearson"))
-modelo_rec
 class(modelo_rec)
 
 # Usando a função getModel() vamos retornar o modelo_rec. Vamos então encontrar a classe
@@ -232,4 +232,15 @@ pred_rec <- predict(object = modelo_rec,
                                      n = top_rec)
 pred_rec
 
+usuario_1 <- pred_rec@items[[1]]
+filmes_usuario1 <- pred_rec@itemLabels[usuario_1]
+filmes_usuario2 <- filmes_usuario1
+for (i in 1:10){
+  filmes_usuario2[i] <- as.character(subset(filmes,
+                                            filmes$movieId == filmes_usuario1[i])$title)
+}
+filmes_usuario2
 
+matriz_recomendação <- sapply(pred_rec@items,
+                              function(x){as.integer(colnames(filmes_classificacao)[x])})
+matriz_recomendação[,1:4]
