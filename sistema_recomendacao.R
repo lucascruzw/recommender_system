@@ -84,13 +84,19 @@ head(localizar)
 
 # Agora iremos criar uma matriz baseado na base de dados de classificacao
 #onde as colunas sao os movieId`s e linhas os userId`s
-matriz_classificacao <- dcast(classificacao, userId~movieId, value.var = "rating", na.rm = FALSE)
-matriz_classificacao <- as.matrix(matriz_classificacao[,-1]) # removendo coluna userId`s
-
+matriz_classificacao_antes <- dcast(classificacao, userId~movieId, value.var = "rating", na.rm = FALSE)
+matriz_classificacao_antes <- as.matrix(matriz_classificacao_antes[,-1]) # removendo coluna userId`s
+class(matriz_classificacao_antes)
 # Como sugere o pacore recommenderlab, convertemos em uma matriz esparsa, pois a maioria dos valores
 #sao iguais a zero
-matriz_classificacao <- as(matriz_classificacao, "realRatingMatrix")
+matriz_classificacao <- as(matriz_classificacao_antes, "realRatingMatrix")
 matriz_classificacao
+getRatingMatrix(matriz_classificacao)
+identical(as(matriz_classificacao, "matrix"),matriz_classificacao_antes)
+#as(matriz_classificacao, "list")
+head(as(matriz_classificacao, "data.frame"))
+
+write.csv(as(matriz_classificacao_antes, "matrix"), "C:/Users/lucas/OneDrive/Área de Trabalho/MBA Data Science & Analytics/TCC/Movie Recommendation/matriz.csv")
 
 # Faremos uma visão geral sobre os importantes parametros de modelos de recomendação 
 #que nos traz varias opcoes
@@ -104,21 +110,25 @@ lapply(modelo_recomendacao, "[[", "description")
 # Como nos estamos trazendo um banco de dados com dados de usuários diversos e suas classificacoes
 #para cada filme que cada um assitiu, vamos trabalhar com o modelo de recomendacao 
 #baseado em filtragem colaborativa - IBCF 
+modelo_recomendacao$UBCF_realRatingMatrix$parameters
 modelo_recomendacao$IBCF_realRatingMatrix$parameters
 
 # Filtragem colaborativa envolve uma sugestão de filmes baseado na coleta de preferencias
 #de outros usuarios. Portanto, recomendação de filme é dependente de uma realacao de
 #similaridade entre dois usuários ou mais. No pacote recommenderlab podemos utilizar a funcao
 #"similarity", que vai nos trazer uma matriz de similaridade entre usuários e também filmes:
-matriz_similaridade <- similarity(matriz_classificacao[1:10,], method = "pearson", which = "users")
+matriz_similaridade <- similarity(matriz_classificacao[1:10,], method = "cosine", which = "users")
 as.matrix(matriz_similaridade)
+write.csv(as(matriz_similaridade, "matrix"), "C:/Users/lucas/OneDrive/Área de Trabalho/MBA Data Science & Analytics/TCC/Movie Recommendation/matriz_similaridade.csv")
 image(as.matrix(matriz_similaridade), main = "Similaridades de Usuários")
 
 # A correlação de pearson é definida em uma faixa entre -1 e 1, no caso da 
 #similaridade para essa biblioteca soma 1 no coeficiente e divide por 2, para
 #manter uma faixa entre 0 e 1
-similaridade_filme <- similarity(matriz_classificacao[,1:10], method = "pearson", which = "items")
+similaridade_filme <- similarity(matriz_classificacao[,1:10], method = "cosine", which = "items")
 as.matrix(similaridade_filme)
+write.csv(as(similaridade_filme, "matrix"), "C:/Users/lucas/OneDrive/Área de Trabalho/MBA Data Science & Analytics/TCC/Movie Recommendation/matriz_sim_filme.csv")
+
 image(as.matrix(similaridade_filme), main = "Similaridades de Filmes")
 
 # Vamos extrair as classificações exclusivas
@@ -152,8 +162,8 @@ image(matriz_classificacao[1:25, 1:25], axes = FALSE, main = "Mapa de Calor das 
 # Preparando nossos dados seguindo 3 passos: Selecionando dados úteis, Normalização e Binarização
 
 # vamos selecionar aqueles usuários que classificaram um filme no mínimo 51 vezes e tambem por visualizacao
-filmes_classificacao <- matriz_classificacao[rowCounts(matriz_classificacao) > 50, 
-                                             colCounts(matriz_classificacao) > 50]
+filmes_classificacao <- matriz_classificacao[rowCounts(matriz_classificacao) > 35 & rowCounts(matriz_classificacao) < 168, 
+                                             colCounts(matriz_classificacao) > 35 & colCounts(matriz_classificacao) < 168]
 filmes_classificacao
 
 min_filmes <- quantile(rowCounts(filmes_classificacao), 0.98)
@@ -191,12 +201,20 @@ image(boa_classificacao[rowCounts(filmes_classificacao) > filme_min_bin,
 # Agora vamos desenvolver nosso próprio sistema de recomendação baseado em filtragem
 #colaborativa (IBCF no recommenderlab). Este tipo de filtragem colaborativa encontra similaridade
 #nos itens baseado em classificações de usuários
-amostra <- sample(x = c(TRUE, FALSE),
-                      size = nrow(filmes_classificacao),
-                      replace = TRUE,
-                      prob = c(0.8, 0.2))
-treino <- filmes_classificacao[amostra, ]
-teste <- filmes_classificacao[!amostra, ]
+
+#amostra <- sample(x = c(TRUE, FALSE),
+#                      size = nrow(filmes_classificacao),
+#                      replace = TRUE,
+#                      prob = c(0.8, 0.2))
+#treino <- filmes_classificacao[amostra, ]
+#teste <- filmes_classificacao[!amostra, ]
+amostra <- evaluationScheme(filmes_classificacao, method="split", train=0.9, given=12)
+treino <- getData(amostra, "train")
+treino
+teste_known <- getData(amostra, "known")
+teste_known
+teste_unknown <- getData(amostra, "unknown")
+teste_unknown
 
 # Exploramos os vários parametros de nosso sistema de recomendação baseado em filtragem
 #colaborativa
@@ -228,10 +246,12 @@ qplot(soma_col, fill=I("steelblue"), col=I("red"))+ ggtitle("Distribuição da s
 #tudo será adicionado no final
 top_rec <- 10 # numero de recomendações para cada usuário
 pred_rec <- predict(object = modelo_rec,
-                                     newdata = teste,
+                                     newdata = teste_known,
                                      n = top_rec)
 pred_rec
 
+pred <- predict(modelo_rec, teste_known, type="ratings")
+pred
 usuario_1 <- pred_rec@items[[1]]
 filmes_usuario1 <- pred_rec@itemLabels[usuario_1]
 filmes_usuario2 <- filmes_usuario1
@@ -244,3 +264,7 @@ filmes_usuario2
 matriz_recomendação <- sapply(pred_rec@items,
                               function(x){as.integer(colnames(filmes_classificacao)[x])})
 matriz_recomendação[,1:4]
+
+
+accuracy <- calcPredictionAccuracy(pred, teste_unknown)
+accuracy
